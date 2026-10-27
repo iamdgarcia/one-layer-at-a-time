@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>One Layer at a Time</title>
+<style>
+  :root {
+    --bg: #0b0e14; --panel: #12161f; --line: #232a38; --ink: #dde3ee;
+    --dim: #8a93a5; --blue: #4c8dff; --green: #3fb96f; --amber: #ffd166; --red: #e5484d;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.5 -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  .wrap { max-width: 1060px; margin: 0 auto; padding: 24px 20px 60px; }
+  header { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+  h1 { font-size: 26px; margin: 0; letter-spacing: -0.5px; }
+  header .sub { color: var(--dim); font-size: 14px; }
+  #infoBtn { margin-left: auto; background: none; border: 1px solid var(--line); color: var(--dim);
+             border-radius: 6px; padding: 4px 10px; cursor: pointer; font-size: 13px; }
+  #infoBtn:hover { color: var(--ink); border-color: var(--dim); }
+  .landing { border: 1px solid var(--line); border-radius: 10px; background: var(--panel);
+             padding: 18px 20px; margin: 18px 0; }
+  .landing h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: var(--dim); margin: 0 0 8px; }
+  .landing p { margin: 6px 0; }
+  .landing .num { color: var(--amber); font-weight: 600; font-family: ui-monospace, monospace; }
+  .landing .do { color: var(--blue); }
+  .controls { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; margin: 16px 0; }
+  .ctl { display: flex; flex-direction: column; gap: 4px; }
+  .ctl label { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--dim); }
+  select {
+    background: var(--panel); color: var(--ink); border: 1px solid var(--line);
+    border-radius: 6px; padding: 7px 10px; font-size: 14px; min-width: 130px;
+  }
+  #go {
+    background: var(--blue); color: #06111f; border: 0; border-radius: 6px;
+    padding: 9px 22px; font-size: 15px; font-weight: 600; cursor: pointer;
+  }
+  #go:disabled { background: var(--line); color: var(--dim); cursor: default; }
+  .stage { display: grid; grid-template-columns: 1fr 300px; gap: 16px; }
+  @media (max-width: 860px) { .stage { grid-template-columns: 1fr; } }
+  canvas { width: 100%; height: 440px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
+  .meters { display: flex; flex-direction: column; gap: 10px; }
+  .meter { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+  .meter .k { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--dim); }
+  .meter .v { font-family: ui-monospace, monospace; font-size: 22px; margin-top: 2px; }
+  .meter .v.small { font-size: 14px; color: var(--dim); }
+  #verdict { color: var(--amber); }
+  #sentence {
+    margin-top: 16px; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 10px; padding: 16px 20px; min-height: 60px;
+    font-size: 20px; font-family: ui-monospace, monospace;
+  }
+  #sentence .pending { color: #3a4152; }
+  #sentence .cur { color: var(--blue); }
+  dialog {
+    background: var(--panel); color: var(--ink); border: 1px solid var(--line);
+    border-radius: 12px; max-width: 640px; padding: 20px 24px;
+  }
+  dialog::backdrop { background: rgba(0,0,0,0.6); }
+  dialog h3 { margin-top: 0; }
+  dialog table { border-collapse: collapse; font-size: 13px; width: 100%; }
+  dialog td, dialog th { border-bottom: 1px solid var(--line); padding: 5px 8px; text-align: left; }
+  dialog th { color: var(--dim); font-weight: 500; }
+  dialog a { color: var(--blue); }
+  dialog .warn { color: var(--amber); font-size: 13px; }
+  footer { margin-top: 28px; color: var(--dim); font-size: 13px; }
+  footer a { color: var(--blue); text-decoration: none; }
+  .mono { font-family: ui-monospace, monospace; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>One Layer at a Time</h1>
+    <span class="sub">how a 70B model fits in 4 GB of VRAM, and what each token costs</span>
+    <button id="infoBtn">how this works</button>
+  </header>
+
+  <section class="landing">
+    <h2>What you will learn</h2>
+    <p>Layer-streaming inference keeps <b>one layer of the model on the GPU at a time</b> and reads the
+    rest from disk, for every token. VRAM stops being a function of model size: a
+    <span class="num">70B</span> model fits in <span class="num">4 GB</span>.</p>
+    <p>The price is time and disk traffic. Generating one 16-token sentence this way, at 4 GB on an NVMe,
+    reads about <span class="num" id="hookTb">2.2 TB</span> off the disk and takes
+    <span class="num" id="hookMin">~15 minutes</span>. When all layers fit, the same sentence is
+    <span class="num" id="hookFast">0.3 s</span>.</p>
+    <h2>What to do</h2>
+    <p class="do">Pick a GPU size, a model and a disk. Press Generate and watch the layers travel,
+    token by token, at the speed the hardware dictates. The meters count real disk traffic.</p>
+  </section>
+
+  <section class="controls">
+    <div class="ctl"><label>GPU</label>
+      <select id="vram">
+        <option value="4" selected>4 GB (laptop / older card)</option>
+        <option value="8">8 GB</option>
+        <option value="16">16 GB</option>
+        <option value="24">24 GB (RTX 4090 / 6000 Ada)</option>
+      </select></div>
+    <div class="ctl"><label>Model</label>
+      <select id="model">
+        <option value="8B">8B dense · 36 layers · 16 GB</option>
+        <option value="70B" selected>70B dense · 80 layers · 140 GB</option>
+        <option value="405B">405B dense · 126 layers · 810 GB</option>
+        <option value="671B">671B MoE · 61 layers · ~37B active</option>
+      </select></div>
+    <div class="ctl"><label>Disk</label>
+      <select id="disk">
+        <option value="NVMe SSD" selected>NVMe SSD (~2.5 GB/s)</option>
+        <option value="SATA SSD">SATA SSD (~0.5 GB/s)</option>
+        <option value="HDD 7200">HDD 7200 (~0.12 GB/s)</option>
+      </select></div>
+    <div class="ctl"><label>Weights</label>
+      <select id="quant">
+        <option value="fp16" selected>fp16 (no quantization)</option>
+        <option value="4bit">4bit block-wise (~4x lighter load)</option>
+      </select></div>
+    <div class="ctl"><label>Playback</label>
+      <select id="speed">
+        <option value="1" selected>real time</option>
+        <option value="10">10x</option>
+        <option value="100">100x</option>
+      </select></div>
+    <button id="go">Generate</button>
+  </section>
+
+  <section class="stage">
+    <canvas id="scene" width="760" height="440"></canvas>
+    <div class="meters">
+      <div class="meter"><div class="k">verdict for this config</div><div class="v small" id="verdict"></div></div>
+      <div class="meter"><div class="k">tokens</div><div class="v" id="mTokens">0 / 16</div></div>
+      <div class="meter"><div class="k">elapsed (simulated)</div><div class="v" id="mTime">0.0 s</div></div>
+      <div class="meter"><div class="k">read from disk</div><div class="v" id="mDisk">0 GB</div></div>
+      <div class="meter"><div class="k">layer trips so far</div><div class="v" id="mTrips">0</div></div>
+    </div>
+  </section>
+
+  <div id="sentence"></div>
+
+  <footer>
+    Built after reading <a href="https://github.com/lyogavin/airllm">lyogavin/airllm</a> (40.9k stars,
+    Apache-2.0): the library that runs 70B-class models on 4 GB cards by streaming one layer at a time.
+    Speed anchors from its README table and real user reports (issues
+    <a href="https://github.com/lyogavin/airllm/issues/364">#364</a>,
+    <a href="https://github.com/lyogavin/airllm/issues/374">#374</a>).
+    This page is a simulation with measured anchors, not a running model. Code:
+    <a href="https://github.com/iamdgarcia/one-layer-at-a-time">iamdgarcia/one-layer-at-a-time</a>.
+  </footer>
+</div>
+
+<dialog id="infoDlg">
+  <h3>How this works, with sources</h3>
+  <p>The physics model, simple and declared:</p>
+  <p class="mono" style="font-size:13px">time/token = (layers that don't fit) x (layer GB / disk GB/s)
+  + (all layers) x (layer GB / 1000 GB/s GPU ingest)</p>
+  <table>
+    <tr><th>constant</th><th>value</th><th>source</th></tr>
+    <tr><td>bytes/param fp16</td><td>2</td><td>arithmetic</td></tr>
+    <tr><td>VRAM for 70B fp16</td><td>~4 GB</td><td>airllm README table (measured by author)</td></tr>
+    <tr><td>VRAM for 27B / 180B / 671B</td><td>3.33 / 5.95 / ~12 GB</td><td>airllm README (2026/07-08 releases)</td></tr>
+    <tr><td>NVMe / SATA / HDD read</td><td>2.5 / 0.5 / 0.12 GB/s</td><td>declared typical sequential</td></tr>
+    <tr><td>GPU weight ingest</td><td>1000 GB/s</td><td>declared RTX-4090-class</td></tr>
+    <tr><td>VRAM overhead</td><td>1.2 GB</td><td>declared (activations + runtime)</td></tr>
+    <tr><td>4bit weights</td><td>bytes / 4</td><td>airllm compression (block-wise, paper 2212.09720); author reports 3x end-to-end, our load-only model gives ~4x</td></tr>
+    <tr><td>real datapoints</td><td>28.6 s/token (3B, Windows) · 30 min/query (20B)</td><td>airllm issues #364 and #374</td></tr>
+  </table>
+  <p class="warn">This is a simulation with measured anchors: your SSD, your GPU and the framework's
+  prefetching shift the constant, not the shape. The shape is the lesson: cost per token is set by
+  the layers that have to travel, and it is paid every token. Reported Windows pathologies (#364)
+  can be far slower than this model.</p>
+  <p style="text-align:right"><button onclick="document.getElementById('infoDlg').close()">close</button></p>
+</dialog>
+
+<script src="sim.js"></script>
+<script>
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+  var cfg = function () {
+    return { model: $('model').value, quant: $('quant').value,
+             vram: parseFloat($('vram').value), disk: $('disk').value,
+             speed: parseFloat($('speed').value) };
+  };
+
+  function fmtGB(gb) {
+    if (gb >= 1000) return (gb / 1000).toFixed(2) + ' TB';
+    if (gb >= 1) return gb.toFixed(1) + ' GB';
+    return (gb * 1000).toFixed(0) + ' MB';
+  }
+  function fmtTime(s) {
+    if (s < 1) return (s * 1000).toFixed(0) + ' ms';
+    if (s < 120) return s.toFixed(1) + ' s';
+    return Math.floor(s / 60) + ' min ' + Math.round(s % 60) + ' s';
+  }
+
+  function updateVerdict() {
+    var c = cfg(), st = Sim.sentenceStats(c.model, c.quant, c.vram, c.disk);
+    $('verdict').textContent =
+      st.resident + ' of ' + st.layers + ' layers resident · ~' +
+      (st.token_s < 1 ? st.token_s.toFixed(2) : st.token_s.toFixed(1)) + ' s/token · sentence: ' +
+      fmtTime(st.sentence_s) + ', ' + fmtGB(st.sentence_gb) + ' read';
+    $('hookTb').textContent = fmtGB(Sim.sentenceStats('70B', 'fp16', 4, 'NVMe SSD').sentence_gb);
+    $('hookMin').textContent = '~' + Math.round(Sim.sentenceStats('70B', 'fp16', 4, 'NVMe SSD').sentence_s / 60) + ' minutes';
+    $('hookFast').textContent = fmtTime(Sim.tokenSeconds('8B', 'fp16', 24, 'NVMe SSD') * 16);
+  }
+
+  // sentence renderer
+  function renderSentence(nDone, cur) {
+    var h = '';
+    for (var i = 0; i < Sim.SENTENCE.length; i++) {
+      if (i < nDone) h += '<span>' + escapeHtml(Sim.SENTENCE[i]) + '</span>';
+      else if (i === nDone && cur) h += '<span class="cur">' + escapeHtml(Sim.SENTENCE[i]) + '</span>';
+      else h += '<span class="pending">' + escapeHtml(Sim.SENTENCE[i]) + '</span>';
+    }
+    $('sentence').innerHTML = h;
+  }
+  function escapeHtml(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
+
+  // scene + loop
+  var scene = null, raf = null, last = null;
+  function stop() { if (raf) cancelAnimationFrame(raf); raf = null; }
+
+  function drawStatic() {
+    var c = cfg();
+    scene = new Sim.Scene($('scene'), c);
+    scene.draw();
+    renderSentence(0, false);
+    updateVerdict();
+  }
+
+  $('go').addEventListener('click', function () {
+    stop();
+    var c = cfg();
+    scene = new Sim.Scene($('scene'), c);
+    $('go').disabled = true;
+    renderSentence(0, false);
+    last = performance.now();
+    function frame(now) {
+      var dt = Math.min(50, now - last); last = now;
+      scene.step(dt);
+      scene.draw();
+      var st = Sim.sentenceStats(c.model, c.quant, c.vram, c.disk);
+      $('mTokens').textContent = scene.tokenIdx + ' / ' + Sim.SENTENCE.length;
+      $('mTime').textContent = fmtTime(scene.elapsed);
+      $('mDisk').textContent = fmtGB(scene.gbRead);
+      $('mTrips').textContent = scene.trips;
+      renderSentence(scene.tokenIdx, !scene.done);
+      if (scene.done) {
+        $('go').disabled = false;
+        raf = null;
+        return;
+      }
+      raf = requestAnimationFrame(frame);
+    }
+    raf = requestAnimationFrame(frame);
+  });
+
+  ['vram', 'model', 'disk', 'quant', 'speed'].forEach(function (id) {
+    $(id).addEventListener('change', function () { stop(); $('go').disabled = false; drawStatic(); });
+  });
+  $('infoBtn').addEventListener('click', function () { $('infoDlg').showModal(); });
+
+  drawStatic();
+})();
+</script>
+</body>
+</html>
