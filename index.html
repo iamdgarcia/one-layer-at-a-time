@@ -86,8 +86,9 @@
     <span class="num">70B</span> model fits in <span class="num">4 GB</span>.</p>
     <p>The price is time and disk traffic. Generating one 16-token sentence this way, at 4 GB on an NVMe,
     reads about <span class="num" id="hookTb">2.2 TB</span> off the disk and takes
-    <span class="num" id="hookMin">~15 minutes</span>. When all layers fit, the same sentence is
-    <span class="num" id="hookFast">0.3 s</span>.</p>
+    <span class="num" id="hookMin">~15 minutes</span>. With every layer resident (a 142 GB card),
+    the same sentence takes <span class="num" id="hookFast">~2 s</span>: four hundred times faster,
+    same model.</p>
     <h2>What to do</h2>
     <p class="do">Pick a GPU size, a model and a disk. Press Generate and watch the layers travel,
     token by token, at the speed the hardware dictates. The meters count real disk traffic.</p>
@@ -205,7 +206,7 @@
       fmtTime(st.sentence_s) + ', ' + fmtGB(st.sentence_gb) + ' read';
     $('hookTb').textContent = fmtGB(Sim.sentenceStats('70B', 'fp16', 4, 'NVMe SSD').sentence_gb);
     $('hookMin').textContent = '~' + Math.round(Sim.sentenceStats('70B', 'fp16', 4, 'NVMe SSD').sentence_s / 60) + ' minutes';
-    $('hookFast').textContent = fmtTime(Sim.tokenSeconds('8B', 'fp16', 24, 'NVMe SSD') * 16);
+    $('hookFast').textContent = fmtTime(Sim.tokenSeconds('70B', 'fp16', 144, 'NVMe SSD') * 16);
   }
 
   // sentence renderer

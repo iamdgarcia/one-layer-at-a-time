@@ -50,4 +50,9 @@ ok('trips per token === 79', st.trips_per_token === 79);
 var r = S.tokenSeconds('70B', 'fp16', 4, 'HDD 7200') / S.tokenSeconds('70B', 'fp16', 4, 'NVMe SSD');
 approx('HDD/NVMe slowdown ratio', r, 2.5 / 0.12, 0.3);
 
+// 11. all-resident bound for the hook: 70B fully resident (144 GB card) = 0.14 s/token, ~2.2 s sentence
+ok('70B all resident @144GB', S.residentLayers('70B', 'fp16', 144) === 80);
+approx('70B all-resident token seconds', S.tokenSeconds('70B', 'fp16', 144, 'NVMe SSD'), 0.14, 0.005);
+approx('70B all-resident sentence seconds', S.tokenSeconds('70B', 'fp16', 144, 'NVMe SSD') * 16, 2.24, 0.05);
+
 console.log('ALL PASS (' + n + ' checks)');
